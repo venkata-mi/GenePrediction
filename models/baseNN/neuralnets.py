@@ -36,7 +36,7 @@ def regionProposalNetwork(base_layers, noOfAnchors):
 	return [x_class, x_regr, base_layers]
 
 
-def nn_base(input_tensor = None):
+def nn_base(input_tensor = None, trainable = True):
 	input_shape = (None, None, 4)
 
 	if input_tensor is None:
@@ -59,11 +59,59 @@ def nn_base(input_tensor = None):
 	print 'INFO: Base Layer Fixed Batch Normalization: ', x
 	x = Activation('relu')(x)
 	x = MaxPooling2D((1,2), strides = (1,2))(x)
-	print 'INFO: Base Layer maxpool1 ', x
+
+	"""
+	x = conv_block(x, 3, [64,64,256], stage = 2, block = 'a', strides = (1,1), trainable = True)
+	x = identity_block(x, 3, [64, 64, 256], stage=2, block='b', trainable = trainable)
+
+	x = identity_block(x, 3, [64, 64, 256], stage=2, block='c', trainable = trainable)
+	
+	x = conv_block(x, 3, [128, 128, 512], stage=3, block='a', trainable = trainable)
+	x = identity_block(x, 3, [128, 128, 512], stage=3, block='b', trainable = trainable)
+	x = identity_block(x, 3, [128, 128, 512], stage=3, block='c', trainable = trainable)
+	x = identity_block(x, 3, [128, 128, 512], stage=3, block='d', trainable = trainable)
+	
+	x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a', trainable = trainable)
+	x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b', trainable = trainable)
+	x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c', trainable = trainable)
+	x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d', trainable = trainable)
+	x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e', trainable = trainable)
+	x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f', trainable = trainable)
+	"""
+
+	print 'INFO: Base Layer output ', x
 
 
 
 
+	return x
+
+
+def identity_block(input_tensor, kernel_size, filters, stage, block, trainable=True):
+
+	nb_filter1, nb_filter2, nb_filter3 = filters
+	
+	if K.image_dim_ordering() == 'tf':
+		bn_axis = 3
+	else:
+		bn_axis = 1
+
+	conv_name_base = 'res' + str(stage) + block + '_branch'
+	bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+	x = Convolution2D(nb_filter1, (1, 1), name=conv_name_base + '2a', trainable=trainable)(input_tensor)
+	x = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+	x = Activation('relu')(x)
+
+	x = Convolution2D(nb_filter2, (1, kernel_size), padding='same', name=conv_name_base + '2b', trainable=trainable)(x)
+	x = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+	x = Activation('relu')(x)
+
+	x = Convolution2D(nb_filter3, (1, 1), name=conv_name_base + '2c', trainable=trainable)(x)
+	x = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+
+	x = Add()([x, input_tensor])
+	x = Activation('relu')(x)
 	return x
 
 
@@ -83,7 +131,7 @@ def identity_block_td(input_tensor, kernel_size, filters, stage, block, trainabl
 	x = TimeDistributed(FixedBatchNormalization(axis=bn_axis), name=bn_name_base + '2a')(x)
 	x = Activation('relu')(x)
 
-	x = TimeDistributed(Convolution2D(nb_filter2, (kernel_size, kernel_size), trainable=trainable, kernel_initializer='normal',padding='same'), name=conv_name_base + '2b')(x)
+	x = TimeDistributed(Convolution2D(nb_filter2, (1, kernel_size), trainable=trainable, kernel_initializer='normal',padding='same'), name=conv_name_base + '2b')(x)
 	x = TimeDistributed(FixedBatchNormalization(axis=bn_axis), name=bn_name_base + '2b')(x)
 	x = Activation('relu')(x)
 
@@ -93,6 +141,36 @@ def identity_block_td(input_tensor, kernel_size, filters, stage, block, trainabl
 	x = Add()([x, input_tensor])
 	x = Activation('relu')(x)
 
+	return x
+
+
+def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(1, 2), trainable=True):
+
+	nb_filter1, nb_filter2, nb_filter3 = filters
+	if K.image_dim_ordering() == 'tf':
+		bn_axis = 3
+	else:
+		bn_axis = 1
+
+	conv_name_base = 'res' + str(stage) + block + '_branch'
+	bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+	x = Convolution2D(nb_filter1, (1, 1), strides=strides, name=conv_name_base + '2a', trainable=trainable)(input_tensor)
+	x = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+	x = Activation('relu')(x)
+
+	x = Convolution2D(nb_filter2, (1, kernel_size), padding='same', name=conv_name_base + '2b', trainable=trainable)(x)
+	x = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+	x = Activation('relu')(x)
+
+	x = Convolution2D(nb_filter3, (1, 1), name=conv_name_base + '2c', trainable=trainable)(x)
+	x = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+
+	shortcut = Convolution2D(nb_filter3, (1, 1), strides=strides, name=conv_name_base + '1', trainable=trainable)(input_tensor)
+	shortcut = FixedBatchNormalization(axis=bn_axis, name=bn_name_base + '1')(shortcut)
+
+	x = Add()([x, shortcut])
+	x = Activation('relu')(x)
 	return x
 
 
@@ -113,7 +191,7 @@ def conv_block_td(input_tensor, kernel_size, filters, stage, block, input_shape,
 	x = TimeDistributed(FixedBatchNormalization(axis=bn_axis), name=bn_name_base + '2a')(x)
 	x = Activation('relu')(x)
 
-	x = TimeDistributed(Convolution2D(nb_filter2, (kernel_size, kernel_size), padding='same', trainable=trainable, kernel_initializer='normal'), name=conv_name_base + '2b')(x)
+	x = TimeDistributed(Convolution2D(nb_filter2, (1, kernel_size), padding='same', trainable=trainable, kernel_initializer='normal'), name=conv_name_base + '2b')(x)
 	x = TimeDistributed(FixedBatchNormalization(axis=bn_axis), name=bn_name_base + '2b')(x)
 	x = Activation('relu')(x)
 
