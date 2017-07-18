@@ -18,10 +18,10 @@ class Config:
 		self.anchor_box_scales = [128, 256, 512]
 
 		# anchor box ratios
-		self.anchor_box_ratios = [[2, 1], [4, 1], [6, 1]]
+		self.anchor_box_ratios = [[1, 1], [2, 1], [4, 1]]
 
 		# size to resize the smallest side of the image
-		self.im_size = 10000
+		self.im_size = 1
 
 		# image channel-wise mean to subtract
 		self.img_channel_mean = [103.939, 116.779, 123.68]
@@ -31,7 +31,7 @@ class Config:
 		self.num_rois = 2
 
 		# stride at the RPN (this depends on the network configuration)
-		self.rpn_stride = 16
+		self.rpn_stride = 1
 
 		self.balanced_classes = False
 

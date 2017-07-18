@@ -20,10 +20,9 @@ from models.baseNN import neuralnets
 from models.baseNN import Config
 
 from data_generation import data_generators
-from data_generation.GenemeDataFetcher import read_genome_sequence_fromFile, getData, writeFeatureToDisk
+from data_generation.GenemeDataFetcher import read_genome_sequence_fromFile, getData, writeFeatureToDisk, read_genome_fasta
 import data_generation.DataGenerator
 from data_generation import roi_helpers
-
 
 import sys
 import time
@@ -34,19 +33,16 @@ sys.setrecursionlimit(40000)
 c = Config.Config()
 
 #number of epochs
-num_epochs = 4
-
-#0 represents non gene, 1 represents gene 
-classes_count = [0,1]
+num_epochs = 1
 
 
-#splitting the sequence into n characters
+#to split the sequence into subsequences of n characters
 seqlen = 10000
 
 #Reading input data from file
 print 'INFO: Reading input data from file'
-wholeSequence = read_genome_sequence_fromFile('511145.12')
-
+#wholeSequence = read_genome_sequence_fromFile('511145.12')
+wholeSequence = read_genome_fasta('511145.12')
 #print writeFeatureToDisk('511145.12')
 dataFrame = getData('511145.12')
 
@@ -131,9 +127,9 @@ try:
 					for bbox in gene_location_dict[seqid]:
 						class_name = 1
 						if seqid > 1:
-							allSequences[seqid]['bboxes'].append({'class': int(1), 'x1': int(bbox[0])-(seqid * seqlen) , 'x2': int(bbox[1])-(seqid * seqlen), 'y1': int(1),'y2': int(1)})
+							allSequences[seqid]['bboxes'].append({'class': int(1), 'x1': int(bbox[0])-(seqid * seqlen) , 'x2': int(bbox[1])-(seqid * seqlen), 'y1': int(0),'y2': int(0)})
 						else:
-							allSequences[seqid]['bboxes'].append({'class': int(1), 'x1': int(bbox[0]) , 'x2': int(bbox[1]), 'y1': int(1),'y2': int(1)})
+							allSequences[seqid]['bboxes'].append({'class': int(1), 'x1': int(bbox[0]) , 'x2': int(bbox[1]), 'y1': int(0),'y2': int(0)})
 
 					if class_name not in class_count:
 						class_count[class_name] = 1
@@ -154,31 +150,19 @@ all_data = []
 for key in allSequences:
 	all_data.append(allSequences[key])
 
-#all_data = np.array(all_data)
-
 
 print 'INFO: data_generation step complete'
 
+
 all_data_npy_format = np.array(all_data)
 print 'INFO: Storing data on to disk'
-
-
-
 np.save('sample_data/data_set.npy', all_data_npy_format)
-
-
-
 #all_data = np.load('sample_data/data_set.npy')
 
-#print all_data.shape
-#print 'sequence', all_data[0]['sequence']
-#print type(all_data)
 
+#getting anchor boxes with gt labels
 data_gen_train = data_generators.get_anchor_gt(all_data, class_count, c, neuralnets.get_img_output_length, K.image_dim_ordering(), mode='train')
 
-
-#input
-#sequence = ['atgctgatagctgattatgcgatctagtga','atgctgatagctgctacgtcgttcatgatg']
 
 sequenceWidth = len(sequence[0])
 
@@ -187,14 +171,11 @@ sequenceWidth = len(sequence[0])
 print 'INFO: Converting splitted sequences into one-hot representation'
 X = np.array(one_hot_encoding_sequences(sequence, seqlen))
 
-print 'INFO: input_shape ',X.shape
+
 
 
 X = X.reshape(X.shape[0], 1, sequenceWidth, 4)
-print X.shape
-
-#y - yet to be created
-
+print 'INFO: input_shape ',X.shape
 
 #only the first element
 #var = K.variable(value = X[0].reshape((1,1,sequenceWidth,4)))
@@ -224,7 +205,6 @@ else:
 roi_input = Input(shape = (c.num_rois, 4))
 
 
-
 number_of_anchors = len(c.anchor_box_scales) * len(c.anchor_box_ratios)
 
 #define the neural network here
@@ -236,7 +216,7 @@ rpn = neuralnets.regionProposalNetwork(shared_layers, number_of_anchors)
 
 
 
-classifier = neuralnets.classifier(shared_layers, roi_input, c.num_rois, nb_classes=len(classes_count), trainable=True)
+classifier = neuralnets.classifier(shared_layers, roi_input, c.num_rois, nb_classes=len(class_count), trainable=True)
 
 
 model_rpn = Model(genome_sequence_input, rpn[:2])
@@ -253,7 +233,7 @@ optimizer_classifier = Adam(lr=1e-4)
 model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(number_of_anchors), losses.rpn_loss_regr(number_of_anchors)])
 
 
-model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
+model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(len(class_count)-1)], metrics={'dense_class_{}'.format(len(class_count)): 'accuracy'})
 model_all.compile(optimizer='sgd', loss='mae')
 
 epoch_length = 1000
@@ -267,7 +247,7 @@ start_time = time.time()
 best_loss = np.Inf
 
 
-print model_rpn.inputs
+#print model_rpn.inputs
 
 print "-----Training Start-----"
 
@@ -315,6 +295,7 @@ for epoch_num in range(num_epochs):
 			rpn_accuracy_for_epoch.append(0)
 			continue
 
+		print 'INFO: ----BUG FIXED-----'
 		neg_samples = np.where(Y1[0, :, -1] == 1)
 		pos_samples = np.where(Y1[0, :, -1] == 0)
 

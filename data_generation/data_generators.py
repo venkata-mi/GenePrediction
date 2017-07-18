@@ -117,14 +117,18 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 		gta[bbox_num, 1] = bbox['x2'] * (resized_width / float(width))
 		gta[bbox_num, 2] = bbox['y1'] * (resized_height / float(height))
 		gta[bbox_num, 3] = bbox['y2'] * (resized_height / float(height))
+
+		#gta[bbox_num, 2] = int(1)
+		#gta[bbox_num, 3] = int(1)
 	
 	# rpn ground truth
 
 	for anchor_size_idx in range(len(anchor_sizes)):
 		for anchor_ratio_idx in range(n_anchratios):
 			anchor_x = anchor_sizes[anchor_size_idx] * anchor_ratios[anchor_ratio_idx][0]
-			anchor_y = anchor_sizes[anchor_size_idx] * anchor_ratios[anchor_ratio_idx][1]	
-			
+			#anchor_y = anchor_sizes[anchor_size_idx] * anchor_ratios[anchor_ratio_idx][1]	
+			anchor_y = 1
+
 			for ix in range(output_width):					
 				# x-coordinates of the current anchor box	
 				x1_anc = downscale * (ix + 0.5) - anchor_x / 2
@@ -140,6 +144,8 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 					y1_anc = downscale * (jy + 0.5) - anchor_y / 2
 					y2_anc = downscale * (jy + 0.5) + anchor_y / 2
 
+					#y1_anc = float(1)
+					#y2_anc = float(1)
 					# ignore boxes that go across image boundaries
 					if y1_anc < 0 or y2_anc > resized_height:
 						continue
@@ -155,6 +161,7 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 						
 						# get IOU of the current GT box and the current anchor box
 						curr_iou = iou([gta[bbox_num, 0], gta[bbox_num, 2], gta[bbox_num, 1], gta[bbox_num, 3]], [x1_anc, y1_anc, x2_anc, y2_anc])
+						
 						# calculate the regression targets if they will be needed
 						if curr_iou > best_iou_for_bbox[bbox_num] or curr_iou > C.rpn_max_overlap:
 							cx = (gta[bbox_num, 0] + gta[bbox_num, 1]) / 2.0
@@ -221,6 +228,7 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 			y_rpn_regr[
 				best_anchor_for_bbox[idx,0], best_anchor_for_bbox[idx,1], start:start+4] = best_dx_for_bbox[idx, :]
 
+	
 	#avoiding theano o
 	#y_rpn_overlap = np.transpose(y_rpn_overlap, (2, 0, 1))
 	y_rpn_overlap = np.expand_dims(y_rpn_overlap, axis=2)
@@ -234,6 +242,7 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 	pos_locs = np.where(np.logical_and(y_rpn_overlap[:, :, :, 0] == 1, y_is_box_valid[:, :, :, 0] == 1))
 	neg_locs = np.where(np.logical_and(y_rpn_overlap[:, :, :, 0] == 0, y_is_box_valid[:, :, :, 0] == 1))
 
+
 	num_pos = len(pos_locs[0])
 
 	# one issue is that the RPN has many more negative than positive regions, so we turn off some of the negative
@@ -242,12 +251,14 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
 
 	if len(pos_locs[0]) > num_regions/2:
 		val_locs = random.sample(range(len(pos_locs[0])), len(pos_locs[0]) - num_regions/2)
-		y_is_box_valid[0, pos_locs[0][val_locs], pos_locs[1][val_locs], pos_locs[2][val_locs]] = 0
+		#y_is_box_valid[0, pos_locs[0][val_locs], pos_locs[1][val_locs], pos_locs[2][val_locs]] = 0
+		y_is_box_valid[0, pos_locs[0][val_locs], 0, pos_locs[2][val_locs]] = 0
 		num_pos = num_regions/2
 
 	if len(neg_locs[0]) + num_pos > num_regions:
 		val_locs = random.sample(range(len(neg_locs[0])), len(neg_locs[0]) - num_pos)
-		y_is_box_valid[0, neg_locs[0][val_locs], neg_locs[1][val_locs], neg_locs[2][val_locs]] = 0
+		#y_is_box_valid[0, neg_locs[0][val_locs], neg_locs[1][val_locs], neg_locs[2][val_locs]] = 0
+		y_is_box_valid[0, neg_locs[0][val_locs], 0, neg_locs[2][val_locs]] = 0
 
 	"""	
 	print y_rpn_overlap.shape
@@ -326,6 +337,7 @@ def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backen
 
 			assert cols == width
 			assert rows == height
+			#assert rows == 1
 
 			# get image dimensions for resizing
 			(resized_width, resized_height) = get_new_img_size(width, height, C.im_size)
@@ -356,13 +368,13 @@ def get_anchor_gt(all_img_data, class_count, C, img_length_calc_function, backen
 			x_img = np.expand_dims(x_img, axis=0)
 
 			y_rpn_regr[:, y_rpn_regr.shape[1]//2:, :, :] *= C.std_scaling
-
+			
 			if backend == 'tf':
 				x_img = np.transpose(x_img, (0, 2, 3, 1))
 				y_rpn_cls = np.transpose(y_rpn_cls, (0, 2, 3, 1))
 				y_rpn_regr = np.transpose(y_rpn_regr, (0, 2, 3, 1))
-
 			"""
+			
 			yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug
 
 			#except Exception as e:

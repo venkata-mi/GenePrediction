@@ -8,9 +8,17 @@ Created on Mon Jun 26 2017.
 from bs4 import BeautifulSoup
 import urllib
 import pandas as pd
+from Bio import SeqIO
 
 #FTP URL for PATRIC
 PatricURL = 'ftp://ftp.patricbrc.org/patric2/genomes/'
+
+
+def read_genome_fasta(genome_id):
+    path = 'sample_data/genome_sequences/{}.fna'.format(genome_id)
+    records = list(SeqIO.parse(path, "fasta"))
+
+    return records[0].seq
 
 def getGenomeSequence(genomeId):
     """
@@ -24,7 +32,7 @@ def getGenomeSequence(genomeId):
     #print type(soup)
 
     genomeSequence = soup.prettify().split('| '+genomeId+']')[1]
-    return genomeSequence.strip('\n')
+    return genomeSequence.replace('\n', '')
 
 
 def getFeaturesForGenome(genomeId, CDS_ONLY):
